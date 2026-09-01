@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
@@ -29,7 +28,7 @@ public class IndogaroDaemonService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (golangProcess == null) {
+        if (golangProcess == null || !golangProcess.isAlive()) {
             startGolangDaemon();
         }
         return START_STICKY; 
@@ -41,8 +40,13 @@ public class IndogaroDaemonService extends Service {
                 File baseDir = new File(getFilesDir(), "moduls");
                 File binFile = new File(baseDir, "bin/indogaro");
 
+                if (!binFile.exists()) {
+                    Log.e(TAG, "FATAL: Binary indogaro tidak ditemukan di: " + binFile.getAbsolutePath());
+                    return;
+                }
+
                 if (!binFile.canExecute()) {
-                    binFile.setExecutable(true);
+                    binFile.setExecutable(true, false);
                 }
 
                 ProcessBuilder pb = new ProcessBuilder(binFile.getAbsolutePath());
@@ -50,28 +54,28 @@ public class IndogaroDaemonService extends Service {
                 pb.redirectErrorStream(true);
 
                 golangProcess = pb.start();
-                Log.i(TAG, "Daemon Golang berhasil diinjeksi ke PID Android.");
+                Log.i(TAG, "Daemon Golang berhasil di-spawn.");
 
-                BufferedReader reader = new BufferedReader(new InputStreamReader(golangProcess.getInputStream()));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    Log.d(TAG, "GO-DAEMON: " + line);
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(golangProcess.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        Log.i(TAG, "GO-DAEMON: " + line);
+                    }
                 }
 
                 int exitCode = golangProcess.waitFor();
                 Log.e(TAG, "Daemon Golang terhenti dengan Exit Code: " + exitCode);
                 
             } catch (Exception e) {
-                Log.e(TAG, "Fatal Error saat eksekusi Daemon: ", e);
+                Log.e(TAG, "Fatal Error saat eksekusi ProcessBuilder: ", e);
             }
         }).start();
     }
 
     @Override
     public void onDestroy() {
-        if (golangProcess != null) {
+        if (golangProcess != null && golangProcess.isAlive()) {
             golangProcess.destroy(); 
-            Log.w(TAG, "Mengirimkan sinyal SIGTERM ke daemon...");
         }
         super.onDestroy();
     }
@@ -97,7 +101,7 @@ public class IndogaroDaemonService extends Service {
                     "Indogaro Background Daemon",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Menjaga koneksi proxy TCP/SOCKS5 tetap berjalan tanpa delay.");
+            channel.setDescription("Menjaga koneksi proxy TCP/SOCKS5 tetap berjalan.");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
