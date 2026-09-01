@@ -24,10 +24,8 @@ jobs:
         run: |
           mkdir -p app/src/main/assets
           if [ -f "main.go" ] || [ -f "go.mod" ]; then
-            echo "[*] Mengompilasi Golang binary ke ARM64..."
+            echo "[*] Mengompilasi Golang binary..."
             CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o app/src/main/assets/indogaro .
-          else
-            echo "[!] File main.go tidak ditemukan di root. Memastikan binary sudah ada di assets..."
           fi
 
       - name: Setup Java JDK 17
@@ -42,8 +40,8 @@ jobs:
       - name: Build APK via Gradle
         run: |
           if [ ! -f "gradlew" ]; then
-            echo "[*] Gradle wrapper tidak ditemukan. Meng-generate wrapper..."
-            gradle wrapper
+            echo "[*] Mengunci Gradle ke versi 8.7 (Syarat Mutlak AGP 8.2.2)..."
+            gradle wrapper --gradle-version 8.7
           fi
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
